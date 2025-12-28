@@ -4,7 +4,10 @@ export interface TranscriptionItem {
   text: string;
   role: 'user' | 'model';
   timestamp: number;
+  mood?: Emotion;
 }
+
+export type Emotion = 'NEUTRAL' | 'HAPPY' | 'EXCITED' | 'SAD' | 'CONCERNED' | 'ANGRY' | 'THOUGHTFUL' | 'CURIOUS' | 'EMPATHETIC';
 
 export enum SessionStatus {
   IDLE = 'IDLE',

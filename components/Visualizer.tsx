@@ -1,10 +1,12 @@
 
 import React, { useRef, useEffect } from 'react';
+import { Emotion } from '../types';
 
 interface VisualizerProps {
   isActive: boolean;
   analyzer?: AnalyserNode;
   color?: string;
+  emotion?: Emotion;
 }
 
 const colorToHex = (color: string = 'blue') => {
@@ -19,9 +21,25 @@ const colorToHex = (color: string = 'blue') => {
   return map[color] || map.blue;
 };
 
-const Visualizer: React.FC<VisualizerProps> = ({ isActive, analyzer, color }) => {
+const emotionToHex = (emotion: Emotion = 'NEUTRAL') => {
+  const map: Record<Emotion, string> = {
+    NEUTRAL: 'transparent',
+    HAPPY: '#facc15',
+    EXCITED: '#ec4899',
+    SAD: '#1e3a8a',
+    CONCERNED: '#0891b2',
+    ANGRY: '#dc2626',
+    THOUGHTFUL: '#14b8a6',
+    CURIOUS: '#8b5cf6',
+    EMPATHETIC: '#fb923c'
+  };
+  return map[emotion] || map.NEUTRAL;
+};
+
+const Visualizer: React.FC<VisualizerProps> = ({ isActive, analyzer, color, emotion = 'NEUTRAL' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const theme = colorToHex(color);
+  const moodColor = emotionToHex(emotion);
 
   useEffect(() => {
     if (!canvasRef.current || !isActive || !analyzer) return;
@@ -46,15 +64,19 @@ const Visualizer: React.FC<VisualizerProps> = ({ isActive, analyzer, color }) =>
       let x = 0;
 
       for (let i = 0; i < bufferLength; i++) {
-        // Enhance visual impact of frequencies
         const barHeight = (dataArray[i] / 255) * height * 0.8;
 
         const gradient = ctx.createLinearGradient(0, height, 0, 0);
         gradient.addColorStop(0, theme.primary);
-        gradient.addColorStop(1, theme.secondary);
+        
+        // If there's an active emotion, blend it into the top of the bars
+        if (emotion !== 'NEUTRAL') {
+          gradient.addColorStop(1, moodColor);
+        } else {
+          gradient.addColorStop(1, theme.secondary);
+        }
 
         ctx.fillStyle = gradient;
-        // Draw with rounded top edge effect
         ctx.beginPath();
         ctx.roundRect(x, height - barHeight, barWidth, barHeight, [4, 4, 0, 0]);
         ctx.fill();
@@ -65,7 +87,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ isActive, analyzer, color }) =>
 
     draw();
     return () => cancelAnimationFrame(animationId);
-  }, [isActive, analyzer, theme]);
+  }, [isActive, analyzer, theme, moodColor, emotion]);
 
   return (
     <div className="relative w-full h-32 flex items-center justify-center pointer-events-none">

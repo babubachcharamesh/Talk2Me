@@ -1,4 +1,6 @@
 
+import { GoogleGenAI, Modality } from "@google/genai";
+
 /**
  * Decodes a base64 string to a Uint8Array.
  * Manual implementation as per instructions.
@@ -64,4 +66,45 @@ export function createPcmBlob(data: Float32Array): { data: string; mimeType: str
     data: encode(new Uint8Array(int16.buffer)),
     mimeType: 'audio/pcm;rate=16000',
   };
+}
+
+/**
+ * Generates and plays a voice sample for a specific persona using Gemini TTS.
+ */
+export async function playPersonaSample(voiceName: string, personaName: string) {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const sampleText = `Hello, I am ${personaName}. This is my unique vocal signature.`;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: sampleText }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voiceName as any },
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) throw new Error("No audio data received");
+
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    const audioBuffer = await decodeAudioData(
+      decode(base64Audio),
+      audioContext,
+      24000,
+      1,
+    );
+    
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    source.start();
+  } catch (error) {
+    console.error("Failed to play voice sample:", error);
+  }
 }

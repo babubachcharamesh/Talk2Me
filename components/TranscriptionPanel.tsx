@@ -1,7 +1,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { TranscriptionItem, ConversationSession } from '../types';
-import { exportToTxt, exportToJson } from '../utils/export-utils';
+import { TranscriptionItem, ConversationSession, User } from '../types';
+import { exportToTxt, exportToJson, exportToPdf } from '../utils/export-utils';
+import Avatar from './Avatar';
 
 interface TranscriptionPanelProps {
   items: TranscriptionItem[];
@@ -9,6 +10,9 @@ interface TranscriptionPanelProps {
   personaColor?: string;
   activeSessionId?: string | null;
   userId?: string | null;
+  user?: User | null;
+  lastSaved?: number | null;
+  isSessionActive?: boolean;
 }
 
 const getColorClasses = (color: string = 'blue') => {
@@ -23,7 +27,16 @@ const getColorClasses = (color: string = 'blue') => {
   return map[color] || map.blue;
 };
 
-const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ items, onClear, personaColor, activeSessionId, userId }) => {
+const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ 
+  items, 
+  onClear, 
+  personaColor, 
+  activeSessionId, 
+  userId,
+  user,
+  lastSaved,
+  isSessionActive
+}) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -52,10 +65,10 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ items, onClear,
     }
   };
 
-  const handleExport = (type: 'txt' | 'json') => {
+  const handleExport = (type: 'txt' | 'json' | 'pdf') => {
     const dummySession: ConversationSession = {
       id: activeSessionId || 'current',
-      userId: userId || 'guest',
+      userId: user?.username || userId || 'guest',
       personaId: personaColor || 'unknown',
       timestamp: Date.now(),
       transcriptions: items,
@@ -63,8 +76,15 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ items, onClear,
       title: 'Current Conversation'
     };
     if (type === 'txt') exportToTxt(dummySession);
-    else exportToJson(dummySession);
+    else if (type === 'json') exportToJson(dummySession);
+    else if (type === 'pdf') exportToPdf(dummySession);
     setShowExportMenu(false);
+  };
+
+  const formatLastSaved = (timestamp: number | null) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return `Synced: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
   };
 
   return (
@@ -73,6 +93,18 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ items, onClear,
         <div className="flex items-center space-x-2">
           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Live Dialogue</h3>
           <span className={`flex h-1.5 w-1.5 rounded-full ${theme.bg} animate-pulse transition-colors duration-500`}></span>
+          
+          {lastSaved && (
+            <div className="flex items-center space-x-1.5 ml-4 px-2 py-0.5 rounded-full bg-white/5 border border-white/5 group relative cursor-help">
+              <span className={`w-1 h-1 rounded-full ${isSessionActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`}></span>
+              <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">
+                {formatLastSaved(lastSaved)}
+              </span>
+              <div className="absolute left-0 top-full mt-1 px-2 py-1 bg-slate-900 border border-white/10 rounded-md text-[8px] text-slate-400 invisible group-hover:visible whitespace-nowrap z-50">
+                Auto-syncing neural data every 30s
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex items-center space-x-3">
           {items.length > 0 && (
@@ -85,9 +117,19 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ items, onClear,
                 <span>Export</span>
               </button>
               {showExportMenu && (
-                <div className="absolute right-0 top-full mt-2 w-32 glass rounded-xl overflow-hidden border border-white/10 shadow-2xl z-50 animate-in slide-in-from-top-2">
-                  <button onClick={() => handleExport('txt')} className="w-full px-4 py-2 text-left text-xs text-slate-300 hover:bg-white/10 transition-colors">TXT File</button>
-                  <button onClick={() => handleExport('json')} className="w-full px-4 py-2 text-left text-xs text-slate-300 hover:bg-white/10 transition-colors border-t border-white/5">JSON Data</button>
+                <div className="absolute right-0 top-full mt-2 w-40 glass rounded-xl overflow-hidden border border-white/10 shadow-2xl z-50 animate-in slide-in-from-top-2">
+                  <button onClick={() => handleExport('pdf')} className="w-full px-4 py-2 text-left text-xs text-slate-300 hover:bg-white/10 transition-colors flex items-center space-x-2">
+                    <svg className="w-3 h-3 text-rose-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" /></svg>
+                    <span>PDF Document</span>
+                  </button>
+                  <button onClick={() => handleExport('txt')} className="w-full px-4 py-2 text-left text-xs text-slate-300 hover:bg-white/10 transition-colors border-t border-white/5 flex items-center space-x-2">
+                    <svg className="w-3 h-3 text-slate-400" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" /></svg>
+                    <span>Plain Text</span>
+                  </button>
+                  <button onClick={() => handleExport('json')} className="w-full px-4 py-2 text-left text-xs text-slate-300 hover:bg-white/10 transition-colors border-t border-white/5 flex items-center space-x-2">
+                    <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" /></svg>
+                    <span>JSON Data</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -97,7 +139,7 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ items, onClear,
               onClick={onClear}
               className="text-[10px] text-slate-500 hover:text-red-400 font-bold uppercase tracking-widest transition-colors px-2 py-1 rounded-md hover:bg-red-400/10"
             >
-              Clear
+              Purge
             </button>
           )}
         </div>
@@ -119,20 +161,31 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ items, onClear,
           items.map((item) => (
             <div 
               key={item.id} 
-              className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+              className={`flex items-start space-x-3 ${item.role === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
             >
-              <div 
-                className={`max-w-[80%] px-5 py-3 rounded-2xl text-sm leading-relaxed transition-all duration-500 ${
-                  item.role === 'user' 
-                    ? `${theme.bg} text-white rounded-br-none shadow-lg ${theme.shadow}` 
-                    : 'bg-slate-800/80 text-slate-100 rounded-bl-none border border-white/5 shadow-xl backdrop-blur-sm'
-                }`}
-              >
-                {item.text}
+              <div className="flex-shrink-0 mt-1">
+                {item.role === 'user' ? (
+                  <Avatar user={user} size="xs" />
+                ) : (
+                  <div className={`w-6 h-6 rounded-full ${theme.bg} flex items-center justify-center text-[10px] font-black text-white shadow-md border border-white/10 transition-colors duration-500`}>
+                    AI
+                  </div>
+                )}
               </div>
-              <span className="text-[9px] font-black text-slate-500 mt-2 uppercase tracking-widest px-1">
-                {item.role === 'user' ? 'USER INPUT' : 'MODEL RESPONSE'}
-              </span>
+              <div className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'} max-w-[80%]`}>
+                <div 
+                  className={`px-5 py-3 rounded-2xl text-sm leading-relaxed transition-all duration-500 ${
+                    item.role === 'user' 
+                      ? `${theme.bg} text-white rounded-tr-none shadow-lg ${theme.shadow}` 
+                      : 'bg-slate-800/80 text-slate-100 rounded-tl-none border border-white/5 shadow-xl backdrop-blur-sm'
+                  }`}
+                >
+                  {item.text}
+                </div>
+                <span className="text-[8px] font-black text-slate-500 mt-1 uppercase tracking-widest px-1">
+                  {item.role === 'user' ? (user?.username || 'GUEST') : 'MODEL RESPONSE'}
+                </span>
+              </div>
             </div>
           ))
         )}
