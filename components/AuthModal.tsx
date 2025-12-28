@@ -27,7 +27,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onAuth, onClose, theme, initialMo
     setError(null);
     setIsSubmitting(true);
 
-    // Simulate network delay for a more realistic feel
+    // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 800));
 
     const storedUsers = JSON.parse(localStorage.getItem('echosphere_users') || '[]');
@@ -47,7 +47,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ onAuth, onClose, theme, initialMo
       }
 
       const userId = Math.random().toString(36).substr(2, 9);
-      const newUser: User = { id: userId, username, email };
+      const isAdmin = email.toLowerCase() === 'admin@echosphere.ai';
+      const newUser: User = { 
+        id: userId, 
+        username, 
+        email, 
+        isAdmin,
+        status: 'active',
+        createdAt: Date.now()
+      };
       
       storedUsers.push({ ...newUser, password });
       localStorage.setItem('echosphere_users', JSON.stringify(storedUsers));
@@ -58,10 +66,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ onAuth, onClose, theme, initialMo
       const existingUser = storedUsers.find((u: any) => u.email === email && u.password === password);
       
       if (existingUser) {
+        // Check Status
+        if (existingUser.status === 'deactivated') {
+          setError('This neural link has been deactivated by system administrators.');
+          setIsSubmitting(false);
+          return;
+        }
+
         onAuth({ 
           id: existingUser.id, 
           username: existingUser.username, 
-          email: existingUser.email 
+          email: existingUser.email,
+          isAdmin: existingUser.isAdmin,
+          status: existingUser.status || 'active'
         });
         onClose();
       } else {
@@ -74,7 +91,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ onAuth, onClose, theme, initialMo
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
       <div className={`w-full max-w-md bg-slate-900 border ${theme.border} rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden transition-all duration-500`}>
-        {/* Decorative background gradients */}
         <div className={`absolute top-0 right-0 w-48 h-48 ${theme.glow} rounded-full blur-[80px] opacity-30 -translate-y-1/2 translate-x-1/2`}></div>
         <div className={`absolute bottom-0 left-0 w-32 h-32 ${theme.glow} rounded-full blur-[60px] opacity-20 translate-y-1/2 -translate-x-1/2`}></div>
         
@@ -90,7 +106,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ onAuth, onClose, theme, initialMo
             {mode === 'signup' ? 'Bridge the gap between human and machine.' : 'Access your private neural archives.'}
           </p>
 
-          {/* Tab Switcher */}
           <div className="flex p-1 bg-white/5 rounded-2xl mb-8">
             <button 
               onClick={() => setMode('signin')}

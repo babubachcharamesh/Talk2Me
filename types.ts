@@ -19,6 +19,9 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  isAdmin?: boolean;
+  status?: 'active' | 'deactivated';
+  createdAt?: number;
 }
 
 export interface Persona {
