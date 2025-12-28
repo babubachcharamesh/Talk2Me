@@ -1,0 +1,7 @@
+{
+  "name": "EchoSphere: Emotional AI",
+  "description": "A real-time voice conversationalist that detects your tone and responds with emotional intelligence. Built using Gemini 2.5 Live API.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
