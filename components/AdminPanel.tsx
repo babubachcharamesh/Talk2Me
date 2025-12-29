@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Persona } from '../types';
 import Avatar from './Avatar';
 import { playPersonaSample } from '../utils/audio-utils';
@@ -22,6 +22,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Persona editing state
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
@@ -59,14 +61,71 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
     const stripped = updatedUsers.map(({ turnCount, ...rest }) => rest);
     localStorage.setItem('echosphere_users', JSON.stringify(stripped));
     setUsers(updatedUsers);
-    // Dispatch event to sync other components
     window.dispatchEvent(new Event('storage'));
+  };
+
+  const handleExportUsers = () => {
+    const storedUsers = JSON.parse(localStorage.getItem('echosphere_users') || '[]');
+    const blob = new Blob([JSON.stringify(storedUsers, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `echosphere_pilots_db_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportUsers = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    setImportProgress(0);
+
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = (event.loaded / event.total) * 100;
+        setImportProgress(percent);
+      }
+    };
+
+    reader.onload = (event) => {
+      setImportProgress(100);
+      // Brief artificial delay to ensure the user sees the completion state
+      setTimeout(() => {
+        try {
+          const data = JSON.parse(event.target?.result as string);
+          if (Array.isArray(data)) {
+            // Validate structure roughly
+            const isValid = data.every(u => u.id && u.email && u.username);
+            if (isValid) {
+              localStorage.setItem('echosphere_users', JSON.stringify(data));
+              refreshData();
+              alert("System database synchronized. Authorization tables updated.");
+            } else {
+              throw new Error("Invalid schema");
+            }
+          }
+        } catch (err) {
+          alert("Critical failure: The uploaded JSON file does not conform to pilot data protocols.");
+        } finally {
+          setImportProgress(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      }, 600);
+    };
+
+    reader.onerror = () => {
+      setImportProgress(null);
+      alert("Critical error: Link synchronization failed during file read.");
+    };
+
+    reader.readAsText(file);
   };
 
   const savePersonas = (updatedPersonas: Persona[]) => {
     localStorage.setItem('echosphere_personas', JSON.stringify(updatedPersonas));
     setPersonas(updatedPersonas);
-    // Dispatch event for App.tsx to see it
     window.dispatchEvent(new StorageEvent('storage', { key: 'echosphere_personas', newValue: JSON.stringify(updatedPersonas) }));
   };
 
@@ -148,7 +207,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
   }, [personas, searchTerm]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-black/90 backdrop-blur-xl animate-in fade-in duration-500">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-500">
       <div className={`w-full max-w-6xl h-full max-h-[850px] bg-slate-900 border ${theme.border} rounded-[3rem] flex flex-col overflow-hidden shadow-2xl relative`}>
         <div className={`absolute top-0 right-0 w-96 h-96 ${theme.glow} rounded-full blur-[120px] opacity-20 pointer-events-none`}></div>
         
@@ -187,26 +246,57 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
             <div className="flex-1 relative">
               <input 
                 type="text"
-                placeholder={activeTab === 'users' ? "Search pilots..." : "Search signatures..."}
+                placeholder={activeTab === 'users' ? "Filter pilots by name or neural signature (email)..." : "Filter signatures..."}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-12 py-4 text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-all placeholder:text-slate-600 focus:bg-white/10"
               />
               <svg className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </div>
+            
             {activeTab === 'users' && (
-              <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
-                {['all', 'active', 'deactivated'].map((s) => (
+              <div className="flex items-center gap-3">
+                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
+                  {['all', 'active', 'deactivated'].map((s) => (
+                    <button 
+                      key={s}
+                      onClick={() => setFilterStatus(s as any)}
+                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${filterStatus === s ? 'bg-white text-slate-950 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                
+                <div className="h-10 w-px bg-white/10"></div>
+                
+                <div className="flex space-x-2">
                   <button 
-                    key={s}
-                    onClick={() => setFilterStatus(s as any)}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${filterStatus === s ? 'bg-white text-slate-950' : 'text-slate-500 hover:text-slate-300'}`}
+                    onClick={handleExportUsers}
+                    className="p-3 bg-white/5 border border-white/10 text-slate-400 hover:text-white rounded-2xl transition-all hover:bg-white/10 group relative"
+                    title="Export Pilot Database (JSON)"
                   >
-                    {s}
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   </button>
-                ))}
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`p-3 border rounded-2xl transition-all relative group ${importProgress !== null ? 'bg-indigo-500 text-white border-indigo-400 animate-pulse' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+                    title="Import Pilot Database (JSON)"
+                    disabled={importProgress !== null}
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept=".json" 
+                    onChange={handleImportUsers} 
+                  />
+                </div>
               </div>
             )}
+
             {activeTab === 'personas' && (
               <button 
                 onClick={() => { setIsAddingPersona(true); setPersonaForm({ voice: 'Puck', color: 'blue', label: 'Guardian' }); }}
@@ -220,75 +310,101 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
 
           <div className="flex-1 overflow-y-auto border border-white/5 rounded-[2rem] bg-black/20 custom-scrollbar p-1">
             {activeTab === 'users' ? (
-              <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 bg-slate-900 border-b border-white/10 z-20">
-                  <tr>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Neural Pilot</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Network Activity</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Commands</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-white/5 transition-colors group">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center space-x-4">
-                          <Avatar user={user} size="md" />
-                          <div>
-                            {editingUserId === user.id ? (
-                              <div className="flex items-center space-x-2">
-                                <input 
-                                  value={editName}
-                                  onChange={(e) => setEditName(e.target.value)}
-                                  className="bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500 shadow-inner"
-                                  autoFocus
-                                  onKeyDown={(e) => e.key === 'Enter' && handleEditName(user.id)}
-                                />
-                                <button onClick={() => handleEditName(user.id)} className="text-emerald-400 hover:text-white bg-emerald-400/10 p-1.5 rounded-lg transition-all">
-                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center space-x-2">
-                                <div className="text-sm font-black text-white">{user.username}</div>
-                                {user.isAdmin && <span className="bg-indigo-500 text-white text-[7px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter">System Admin</span>}
-                                <button onClick={() => { setEditingUserId(user.id); setEditName(user.username); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white transition-opacity p-1">
-                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                </button>
-                              </div>
-                            )}
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wide mt-0.5">{user.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="text-[10px] text-slate-400">
-                          <span className="font-black text-white">{user.turnCount || 0}</span> signals
-                        </div>
-                        <div className="text-[9px] text-slate-600 font-mono">UID: {user.id}</div>
-                      </td>
-                      <td className="px-6 py-5">
-                         <span className={`text-[10px] font-black uppercase tracking-widest ${user.status === 'deactivated' ? 'text-rose-400' : 'text-emerald-400'}`}>
-                           {user.status === 'deactivated' ? 'Severed' : 'Linked'}
-                         </span>
-                      </td>
-                      <td className="px-6 py-5 text-right">
-                        {user.email !== 'admin@echosphere.ai' && (
-                          <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-all">
-                            <button onClick={() => toggleUserStatus(user.id)} className={`p-2 rounded-xl border ${user.status === 'deactivated' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`} title={user.status === 'deactivated' ? "Restore Link" : "Sever Link"}>
-                              {user.status === 'deactivated' ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636" /></svg>}
-                            </button>
-                            <button onClick={() => deleteUser(user.id)} className="p-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl hover:bg-rose-500/30">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                          </div>
-                        )}
-                      </td>
+              <div className="w-full">
+                {/* IMPORT PROGRESS BAR */}
+                {importProgress !== null && (
+                  <div className="mx-6 my-6 p-6 glass rounded-2xl border border-indigo-500/30 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></div>
+                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Neural Database Synchronization</span>
+                      </div>
+                      <span className="text-[10px] font-black text-white bg-indigo-500/20 px-2 py-0.5 rounded-md">{Math.round(importProgress)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+                      <div 
+                        className="h-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.6)] transition-all duration-300 ease-out" 
+                        style={{ width: `${importProgress}%` }}
+                      ></div>
+                    </div>
+                    <p className="mt-3 text-[9px] font-bold text-slate-500 uppercase tracking-widest text-center">Do not terminate session during pilot record reconciliation.</p>
+                  </div>
+                )}
+
+                <table className="w-full text-left border-collapse">
+                  <thead className="sticky top-0 bg-slate-900 border-b border-white/10 z-20">
+                    <tr>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Neural Pilot</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Network Activity</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Commands</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {filteredUsers.length > 0 ? filteredUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-white/5 transition-colors group">
+                        <td className="px-6 py-5">
+                          <div className="flex items-center space-x-4">
+                            <Avatar user={user} size="md" />
+                            <div>
+                              {editingUserId === user.id ? (
+                                <div className="flex items-center space-x-2">
+                                  <input 
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    className="bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500 shadow-inner"
+                                    autoFocus
+                                    onKeyDown={(e) => e.key === 'Enter' && handleEditName(user.id)}
+                                  />
+                                  <button onClick={() => handleEditName(user.id)} className="text-emerald-400 hover:text-white bg-emerald-400/10 p-1.5 rounded-lg transition-all">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center space-x-2">
+                                  <div className="text-sm font-black text-white">{user.username}</div>
+                                  {user.isAdmin && <span className="bg-indigo-500 text-white text-[7px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter">System Admin</span>}
+                                  <button onClick={() => { setEditingUserId(user.id); setEditName(user.username); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white transition-opacity p-1">
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                  </button>
+                                </div>
+                              )}
+                              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wide mt-0.5">{user.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="text-[10px] text-slate-400">
+                            <span className="font-black text-white">{user.turnCount || 0}</span> signals
+                          </div>
+                          <div className="text-[9px] text-slate-600 font-mono">UID: {user.id}</div>
+                        </td>
+                        <td className="px-6 py-5">
+                           <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${user.status === 'deactivated' ? 'text-rose-400 border-rose-500/20 bg-rose-500/5' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5'}`}>
+                             {user.status === 'deactivated' ? 'Severed' : 'Linked'}
+                           </span>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                          {user.email !== 'admin@echosphere.ai' && (
+                            <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-all">
+                              <button onClick={() => toggleUserStatus(user.id)} className={`p-2 rounded-xl border ${user.status === 'deactivated' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'}`} title={user.status === 'deactivated' ? "Restore Link" : "Sever Link"}>
+                                {user.status === 'deactivated' ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636" /></svg>}
+                              </button>
+                              <button onClick={() => deleteUser(user.id)} className="p-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl hover:bg-rose-500/30">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-20 text-center text-slate-600 italic">No pilots found matching current vector filters.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
                 {filteredPersonas.map((persona) => (

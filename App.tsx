@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { SessionStatus, TranscriptionItem, Persona, User, Emotion } from './types';
-import { decode, decodeAudioData, createPcmBlob, playPersonaSample } from './utils/audio-utils';
+import { decode, decodeAudioData, createPcmBlob, playPersonaSample, encode } from './utils/audio-utils';
 import Visualizer from './components/Visualizer';
 import TranscriptionPanel from './components/TranscriptionPanel';
 import AuthModal from './components/AuthModal';
@@ -87,16 +87,21 @@ const App: React.FC = () => {
   const [currentMood, setCurrentMood] = useState<Emotion>('NEUTRAL');
   const [currentTopic, setCurrentTopic] = useState<string>('');
   const [status, setStatus] = useState<SessionStatus>(SessionStatus.IDLE);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcriptions, setTranscriptions] = useState<TranscriptionItem[]>([]);
   const [lastSaved, setLastSaved] = useState<number | null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [ambientSync, setAmbientSync] = useState(true);
   const [previewingPersonaId, setPreviewingPersonaId] = useState<string | null>(null);
+  const [inputMode, setInputMode] = useState<'VOICE' | 'TEXT'>('VOICE');
+  const [textInputValue, setTextInputValue] = useState('');
+  const [isSendingText, setIsSendingText] = useState(false);
 
   const sessionRef = useRef<any>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const analyzerRef = useRef<AnalyserNode | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
@@ -210,20 +215,33 @@ const App: React.FC = () => {
   };
 
   const stopSession = useCallback(() => {
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect();
+      scriptProcessorRef.current.onaudioprocess = null;
+      scriptProcessorRef.current = null;
+    }
+
     if (sessionRef.current) {
-      sessionRef.current.close();
+      try {
+        sessionRef.current.close();
+      } catch (e) {}
       sessionRef.current = null;
     }
+
     if (inputAudioContextRef.current) {
-      inputAudioContextRef.current.close();
+      inputAudioContextRef.current.close().catch(() => {});
       inputAudioContextRef.current = null;
     }
     if (outputAudioContextRef.current) {
-      outputAudioContextRef.current.close();
+      outputAudioContextRef.current.close().catch(() => {});
       outputAudioContextRef.current = null;
     }
-    sourcesRef.current.forEach(source => source.stop());
+
+    sourcesRef.current.forEach(source => {
+      try { source.stop(); } catch (e) {}
+    });
     sourcesRef.current.clear();
+
     nextStartTimeRef.current = 0;
     setStatus(SessionStatus.IDLE);
     setCurrentMood('NEUTRAL');
@@ -236,52 +254,79 @@ const App: React.FC = () => {
       return;
     }
 
-    const storedUsers = JSON.parse(localStorage.getItem('echosphere_users') || '[]');
-    const liveUserData = storedUsers.find((u: User) => u.id === user.id);
-    if (liveUserData && liveUserData.status === 'deactivated') {
-      alert("Transmission Forbidden: Your neural signature has been severed by system administration.");
-      logout();
+    stopSession();
+    setErrorMessage(null);
+
+    let stream: MediaStream | null = null;
+    if (inputMode === 'VOICE') {
+      try {
+        setStatus(SessionStatus.CONNECTING);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err: any) {
+        console.error('Microphone access failed:', err);
+        setErrorMessage("Microphone access denied. Please check your browser permissions.");
+        setStatus(SessionStatus.ERROR);
+        return;
+      }
+    } else {
+      setStatus(SessionStatus.CONNECTED);
+      // For text mode, we just set the status to connected to show the chat UI
+      // We don't actually need a "live" bridge unless we want to use it for text
+      // But we'll use generateContent for textTurns to keep it simpler
       return;
     }
 
     try {
-      setStatus(SessionStatus.CONNECTING);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      const inCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      const outCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       
-      const outputNode = outputAudioContextRef.current.createGain();
-      outputNode.connect(outputAudioContextRef.current.destination);
+      await inCtx.resume();
+      await outCtx.resume();
       
-      analyzerRef.current = outputAudioContextRef.current.createAnalyser();
+      inputAudioContextRef.current = inCtx;
+      outputAudioContextRef.current = outCtx;
+      
+      const outputNode = outCtx.createGain();
+      outputNode.connect(outCtx.destination);
+      
+      analyzerRef.current = outCtx.createAnalyser();
       analyzerRef.current.fftSize = 256;
       outputNode.connect(analyzerRef.current);
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
       const topicInstruction = currentTopic 
-        ? `\n\nCRITICAL CONTEXT: The user has specified a specific topic for this conversation. You must talk EXCLUSIVELY about: "${currentTopic}". If the user attempts to change the subject, politely guide the conversation back to "${currentTopic}" while staying in character as ${activePersona.name}.`
+        ? `\n\nCRITICAL CONTEXT: The user has specified a specific topic: "${currentTopic}". Talk EXCLUSIVELY about this topic.`
         : "";
 
       const sessionPromise = ai.live.connect({
         model: MODEL_NAME,
         callbacks: {
           onopen: () => {
+            setErrorMessage(null);
             setStatus(SessionStatus.CONNECTED);
-            const source = inputAudioContextRef.current!.createMediaStreamSource(stream);
-            const scriptProcessor = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
             
-            scriptProcessor.onaudioprocess = (e) => {
-              const inputData = e.inputBuffer.getChannelData(0);
-              const pcmBlob = createPcmBlob(inputData);
-              sessionPromise.then((session) => {
-                session.sendRealtimeInput({ media: pcmBlob });
-              });
-            };
-            
-            source.connect(scriptProcessor);
-            scriptProcessor.connect(inputAudioContextRef.current!.destination);
+            if (stream) {
+              const source = inCtx.createMediaStreamSource(stream);
+              const scriptProcessor = inCtx.createScriptProcessor(4096, 1, 1);
+              scriptProcessorRef.current = scriptProcessor;
+              
+              scriptProcessor.onaudioprocess = (e) => {
+                const inputData = e.inputBuffer.getChannelData(0);
+                const pcmBlob = createPcmBlob(inputData);
+                
+                sessionPromise.then((session) => {
+                  if (session && scriptProcessorRef.current) {
+                    session.sendRealtimeInput({ media: pcmBlob });
+                  }
+                }).catch(() => {
+                  if (scriptProcessorRef.current) scriptProcessorRef.current.disconnect();
+                });
+              };
+              
+              source.connect(scriptProcessor);
+              scriptProcessor.connect(inCtx.destination);
+            }
           },
           onmessage: async (message: LiveServerMessage) => {
             let detectedMoodOnTurn: Emotion = currentMood;
@@ -290,7 +335,6 @@ const App: React.FC = () => {
               const text = message.serverContent.outputTranscription.text;
               currentOutputTranscriptionRef.current += text;
               
-              // Detect mood tag in real-time
               const moodMatch = text.match(/\[MOOD:\s*(\w+)\]/i);
               if (moodMatch) {
                 const detectedMood = moodMatch[1].toUpperCase() as Emotion;
@@ -306,8 +350,6 @@ const App: React.FC = () => {
             if (message.serverContent?.turnComplete) {
               const userText = currentInputTranscriptionRef.current.trim();
               const modelRawText = currentOutputTranscriptionRef.current.trim();
-              
-              // Strip mood tag for display
               const modelDisplayText = modelRawText.replace(/\[MOOD:\s*\w+\]/gi, '').trim();
 
               if (userText || modelDisplayText) {
@@ -336,7 +378,7 @@ const App: React.FC = () => {
               currentOutputTranscriptionRef.current = '';
             }
 
-            const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+            const base64EncodedAudioString = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (base64EncodedAudioString && outputAudioContextRef.current) {
               const ctx = outputAudioContextRef.current;
               nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
@@ -351,24 +393,27 @@ const App: React.FC = () => {
             }
 
             if (message.serverContent?.interrupted) {
-              sourcesRef.current.forEach(s => s.stop());
+              sourcesRef.current.forEach(s => { try { s.stop(); } catch(e){} });
               sourcesRef.current.clear();
               nextStartTimeRef.current = 0;
             }
           },
           onerror: (e) => {
             console.error('Session error:', e);
+            setErrorMessage("Neural bridge collapsed. Recovering system...");
             setStatus(SessionStatus.ERROR);
             stopSession();
           },
           onclose: () => {
-            setStatus(SessionStatus.IDLE);
-            stopSession();
+            if (status !== SessionStatus.ERROR) {
+              setStatus(SessionStatus.IDLE);
+              stopSession();
+            }
           }
         },
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: `${activePersona.prompt}${topicInstruction}\n\nCRITICAL: You are equipped with emotional intelligence. At the very start of EVERY response, output your current emotional state in brackets, like this: [MOOD: HAPPY], [MOOD: CONCERNED], [MOOD: EMPATHETIC], [MOOD: CURIOUS], [MOOD: THOUGHTFUL]. Choose from: HAPPY, EXCITED, SAD, CONCERNED, ANGRY, THOUGHTFUL, CURIOUS, EMPATHETIC, NEUTRAL.`,
+          systemInstruction: `${activePersona.prompt}${topicInstruction}\n\nCRITICAL: You are an interactive voice assistant. You MUST respond with audio. Start EVERY response with your mood in brackets: [MOOD: HAPPY], [MOOD: THOUGHTFUL], etc. Speak naturally and concisely.`,
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: activePersona.voice } }
           },
@@ -377,11 +422,108 @@ const App: React.FC = () => {
         }
       });
       sessionRef.current = await sessionPromise;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to start session:', err);
+      setErrorMessage("System failed to establish neural link. Retrying...");
       setStatus(SessionStatus.ERROR);
+      stopSession();
     }
-  }, [user, activePersona, stopSession, logout, currentMood, currentTopic]);
+  }, [user, activePersona, stopSession, currentMood, currentTopic, status, inputMode]);
+
+  const handleSendText = async () => {
+    if (!textInputValue.trim() || !user || isSendingText) return;
+    
+    const textToSend = textInputValue.trim();
+    setTextInputValue('');
+    setIsSendingText(true);
+
+    // Add user message to transcript
+    const userMsgId = Math.random().toString(36).substr(2, 9);
+    setTranscriptions(prev => [...prev, {
+      id: userMsgId,
+      text: textToSend,
+      role: 'user',
+      timestamp: Date.now()
+    }]);
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const topicInstruction = currentTopic 
+        ? `\n\nCRITICAL CONTEXT: The user has specified a specific topic: "${currentTopic}". Talk EXCLUSIVELY about this topic.`
+        : "";
+
+      // Ensure output context is ready
+      if (!outputAudioContextRef.current) {
+        outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      }
+      await outputAudioContextRef.current.resume();
+      
+      const outCtx = outputAudioContextRef.current;
+      const outputNode = outCtx.createGain();
+      outputNode.connect(outCtx.destination);
+      
+      if (!analyzerRef.current) {
+        analyzerRef.current = outCtx.createAnalyser();
+        analyzerRef.current.fftSize = 256;
+      }
+      outputNode.connect(analyzerRef.current);
+
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: [
+          // Basic history context
+          ...transcriptions.slice(-10).map(t => ({ role: t.role, parts: [{ text: t.text }] })),
+          { role: 'user', parts: [{ text: textToSend }] }
+        ],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          systemInstruction: `${activePersona.prompt}${topicInstruction}\n\nCRITICAL: You are an interactive voice assistant. You MUST respond with audio. Start EVERY response with your mood in brackets: [MOOD: HAPPY], [MOOD: THOUGHTFUL], etc. Speak naturally and concisely.`,
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: activePersona.voice } }
+          }
+        }
+      });
+
+      const responseText = response.text || '';
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      
+      let detectedMood: Emotion = 'NEUTRAL';
+      const moodMatch = responseText.match(/\[MOOD:\s*(\w+)\]/i);
+      if (moodMatch) {
+        const m = moodMatch[1].toUpperCase() as Emotion;
+        if (MOOD_CONFIG[m]) detectedMood = m;
+      }
+
+      setCurrentMood(detectedMood);
+      const displayContent = responseText.replace(/\[MOOD:\s*\w+\]/gi, '').trim();
+
+      // Add model response to transcript
+      setTranscriptions(prev => [...prev, {
+        id: Math.random().toString(36).substr(2, 9),
+        text: displayContent,
+        role: 'model',
+        timestamp: Date.now(),
+        mood: detectedMood
+      }]);
+
+      // Play audio response
+      if (base64Audio) {
+        nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outCtx.currentTime);
+        const audioBuffer = await decodeAudioData(decode(base64Audio), outCtx, 24000, 1);
+        const source = outCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(outputNode);
+        source.start(nextStartTimeRef.current);
+        nextStartTimeRef.current += audioBuffer.duration;
+      }
+
+    } catch (err) {
+      console.error('Text sending failed:', err);
+      setErrorMessage("System failed to synthesize response.");
+    } finally {
+      setIsSendingText(false);
+    }
+  };
 
   const handleClearHistory = () => {
     if (user && confirm('Are you sure you want to delete your private conversation history?')) {
@@ -405,7 +547,6 @@ const App: React.FC = () => {
         isSessionActive={status === SessionStatus.CONNECTED} 
       />
       
-      {/* Background Mood Overlay */}
       <div className={`fixed inset-0 pointer-events-none z-0 transition-colors duration-1000 ${theme.moodAura}`}></div>
 
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -427,6 +568,14 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-6">
+          <button 
+            onClick={() => setAmbientSync(!ambientSync)}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-2xl border transition-all duration-500 ${ambientSync ? `${theme.border} bg-white/5` : 'border-white/5 opacity-50'}`}
+          >
+            <div className={`w-2 h-2 rounded-full ${ambientSync ? `${theme.bg} animate-pulse` : 'bg-slate-600'}`}></div>
+            <span className={`text-[10px] font-black uppercase tracking-widest ${ambientSync ? 'text-white' : 'text-slate-500'}`}>Resonance</span>
+          </button>
+
           {user ? (
             <div className="flex items-center space-x-4">
               {user.isAdmin && (
@@ -461,33 +610,44 @@ const App: React.FC = () => {
 
       <main className="relative z-10 max-w-7xl mx-auto px-8 pt-4 pb-20 flex flex-col lg:flex-row gap-8 min-h-[calc(100vh-100px)]">
         <div className="lg:w-1/3 flex flex-col space-y-6">
-          {/* Persona Card */}
           <div className="glass rounded-[2.5rem] p-8 border border-white/10 relative overflow-hidden flex flex-col items-center">
             <div className={`absolute top-0 right-0 w-32 h-32 ${theme.moodGlow} rounded-full blur-[60px] opacity-20 transition-all duration-[800ms]`}></div>
             
             <div className={`w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-white/10 to-transparent mb-6 transition-all duration-500 ${status === SessionStatus.CONNECTED ? 'scale-110' : ''}`}>
-              <div className={`w-full h-full rounded-full ${theme.bg} flex items-center justify-center text-5xl font-black text-white shadow-2xl relative transition-all duration-500 ring-4 ${theme.moodRing} ${status === SessionStatus.CONNECTED && currentMood !== 'NEUTRAL' ? 'animate-pulse' : ''}`}>
+              <div className={`w-full h-full rounded-full ${theme.bg} flex items-center justify-center text-5xl font-black text-white shadow-2xl relative transition-all duration-500 ring-4 ${theme.moodRing}`}>
                 {activePersona.name[0]}
-                {status === SessionStatus.CONNECTED && (
-                  <span className={`absolute inset-0 rounded-full animate-ping opacity-30 ${theme.moodGlow}`}></span>
-                )}
               </div>
             </div>
 
             <h2 className="text-2xl font-black text-white mb-1 transition-all duration-500 text-center">{activePersona.name}</h2>
             <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4">{activePersona.label}</p>
             
+            <div className="flex p-1 bg-white/5 rounded-2xl mb-8 w-full border border-white/10">
+              <button 
+                onClick={() => setInputMode('VOICE')}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center space-x-2 ${inputMode === 'VOICE' ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" /></svg>
+                <span>Voice</span>
+              </button>
+              <button 
+                onClick={() => setInputMode('TEXT')}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center space-x-2 ${inputMode === 'TEXT' ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /></svg>
+                <span>Text</span>
+              </button>
+            </div>
+
             {status === SessionStatus.CONNECTED && (
-               <div className="w-full mb-8 animate-in fade-in zoom-in slide-in-from-top-4 duration-700">
+               <div className="w-full mb-8 animate-in fade-in zoom-in duration-700">
                   <div className={`flex flex-col items-center space-y-3 p-4 border border-white/10 rounded-2xl shadow-inner backdrop-blur-sm transition-colors duration-700 ${theme.moodAura}`}>
                     <div className="flex items-center justify-between w-full mb-1">
                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Neural Status Monitor</span>
-                      <div className="flex items-center space-x-2">
-                        <span className="flex items-center space-x-1">
-                          <span className={`w-1.5 h-1.5 rounded-full ${theme.moodGlow} animate-pulse`}></span>
-                          <span className={`text-[8px] font-bold uppercase ${theme.moodTextColor}`}>Synced</span>
-                        </span>
-                      </div>
+                      <span className="flex items-center space-x-1">
+                        <span className={`w-1.5 h-1.5 rounded-full ${theme.moodGlow} animate-pulse`}></span>
+                        <span className={`text-[8px] font-bold uppercase ${theme.moodTextColor}`}>Synced</span>
+                      </span>
                     </div>
                     
                     <div className="flex items-center space-x-4 w-full">
@@ -499,15 +659,18 @@ const App: React.FC = () => {
                           {theme.moodLabel}
                         </div>
                         <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden border border-white/5">
-                          <div 
-                            className={`h-full transition-all duration-1000 ${theme.moodGlow}`} 
-                            style={{ width: status === SessionStatus.CONNECTED ? '100%' : '0%', opacity: 0.8 }}
-                          ></div>
+                          <div className={`h-full transition-all duration-1000 ${theme.moodGlow}`} style={{ width: '100%' }}></div>
                         </div>
                       </div>
                     </div>
                   </div>
                </div>
+            )}
+
+            {errorMessage && (
+              <div className="w-full mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl animate-in slide-in-from-top-2">
+                <p className="text-[10px] font-black text-rose-400 uppercase tracking-wider leading-relaxed">{errorMessage}</p>
+              </div>
             )}
 
             <p className="text-slate-400 text-sm text-center leading-relaxed font-medium px-4 mb-8">
@@ -527,62 +690,29 @@ const App: React.FC = () => {
                 <button 
                   disabled={status === SessionStatus.CONNECTING}
                   onClick={startSession}
-                  className={`w-full py-4 ${theme.bg} text-white font-black rounded-2xl shadow-xl shadow-black/40 hover:brightness-110 transition-all active:scale-95 flex items-center justify-center space-x-3 disabled:opacity-50 transition-colors duration-500`}
+                  className={`w-full py-4 ${theme.bg} text-white font-black rounded-2xl shadow-xl shadow-black/40 hover:brightness-110 transition-all active:scale-95 flex items-center justify-center space-x-3 disabled:opacity-50`}
                 >
-                  {status === SessionStatus.CONNECTING ? (
-                    <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
-                      <span>INITIATE LINK</span>
-                    </>
-                  )}
+                  {status === SessionStatus.CONNECTING ? 'SYNCHRONIZING...' : (inputMode === 'VOICE' ? 'INITIATE VOICE LINK' : 'START TEXT CHAT')}
                 </button>
               )}
             </div>
 
             <div className="w-full">
-              <div className="flex items-center justify-between mb-4 ml-1">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Neural Signature</label>
-                {!user && (
-                  <span className="text-[8px] font-black text-amber-500 uppercase animate-pulse">Authentication Required</span>
-                )}
-              </div>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-4 ml-1">Neural Signature</label>
               <div className={`grid grid-cols-5 gap-2 transition-opacity duration-300 ${!user ? 'opacity-40 grayscale pointer-events-none' : 'opacity-100'}`}>
-                {personas.map(p => {
-                  const initials = p.name.split(' ').map(n => n[0]).join('').substring(0, 2);
-                  return (
-                    <div key={p.id} className="relative group/p">
-                      <button
-                        onClick={() => {
-                          if (user && status === SessionStatus.IDLE) setActivePersona(p);
-                        }}
-                        disabled={!user || status !== SessionStatus.IDLE}
-                        className={`w-full aspect-square rounded-xl flex items-center justify-center font-black text-[10px] transition-all ${
-                          activePersona.id === p.id 
-                            ? `${theme.bg} text-white scale-110 shadow-lg ring-2 ring-white/20` 
-                            : 'bg-white/5 text-slate-500 hover:bg-white/10'
-                        } disabled:cursor-not-allowed`}
-                        title={user ? p.name : 'Sign in to switch signature'}
-                      >
-                        {initials}
-                      </button>
-                      {user && status === SessionStatus.IDLE && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handlePreviewVoice(p); }}
-                          className={`absolute -top-1 -right-1 p-1 rounded-full bg-slate-900 border border-white/10 text-white/50 hover:text-white hover:scale-110 transition-all opacity-0 group-hover/p:opacity-100 shadow-xl ${previewingPersonaId === p.id ? 'animate-pulse text-indigo-400' : ''}`}
-                          title="Preview Voice Signature"
-                        >
-                          {previewingPersonaId === p.id ? (
-                             <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                          ) : (
-                             <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217z" /></svg>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                {personas.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => (status === SessionStatus.IDLE || status === SessionStatus.ERROR) && setActivePersona(p)}
+                    className={`w-full aspect-square rounded-xl flex items-center justify-center font-black text-[10px] transition-all ${
+                      activePersona.id === p.id 
+                        ? `${theme.bg} text-white scale-110 shadow-lg ring-2 ring-white/20` 
+                        : 'bg-white/5 text-slate-500 hover:bg-white/10'
+                    }`}
+                  >
+                    {p.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -598,69 +728,59 @@ const App: React.FC = () => {
         </div>
 
         <div className="lg:w-2/3 flex flex-col space-y-6">
-          {/* Topic Context Card */}
           <div className={`glass rounded-[2rem] p-6 border transition-all duration-700 ${currentTopic ? theme.border : 'border-white/5'}`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${currentTopic ? theme.bg : 'bg-slate-700'} ${currentTopic && 'animate-pulse'}`}></div>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Conversation Vector (Topic)</h3>
-              </div>
-              {currentTopic && (
-                <button 
-                  onClick={() => setCurrentTopic('')}
-                  className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-400 transition-colors"
-                >
-                  Clear Vector
-                </button>
-              )}
-            </div>
-            <div className="relative">
-              <input 
-                type="text"
-                placeholder="Ex: My college applications, plans for the weekend, tech trends..."
-                value={currentTopic}
-                onChange={(e) => setCurrentTopic(e.target.value)}
-                className={`w-full bg-white/5 border rounded-2xl px-6 py-4 text-sm text-white focus:outline-none transition-all placeholder:text-slate-600 focus:bg-white/10 ${currentTopic ? theme.border : 'border-white/10'}`}
-              />
-              <div className={`absolute right-4 top-1/2 -translate-y-1/2 flex items-center space-x-2 transition-opacity ${currentTopic ? 'opacity-100' : 'opacity-20'}`}>
-                <span className={`text-[10px] font-black uppercase tracking-widest ${theme.text}`}>Strict Sync</span>
-                <svg className={`w-4 h-4 ${theme.text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              </div>
-            </div>
-            {status === SessionStatus.CONNECTED && currentTopic && (
-              <p className="mt-3 text-[9px] font-bold text-indigo-400/60 uppercase tracking-widest animate-pulse ml-1 text-center">
-                * Restart Transmission to apply new vector if changed during active session *
-              </p>
-            )}
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Conversation Vector (Topic)</h3>
+            <input 
+              type="text"
+              placeholder="Ex: My college applications, plans for the weekend, tech trends..."
+              value={currentTopic}
+              onChange={(e) => setCurrentTopic(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-all placeholder:text-slate-600"
+            />
           </div>
 
-          <TranscriptionPanel 
-            items={transcriptions} 
-            onClear={handleClearHistory}
-            personaColor={activePersona.color}
-            activeSessionId={user?.id}
-            userId={user?.id}
-            user={user}
-            lastSaved={lastSaved}
-            isSessionActive={status === SessionStatus.CONNECTED}
-          />
+          <div className="flex-1 flex flex-col min-h-0">
+            <TranscriptionPanel 
+              items={transcriptions} 
+              onClear={handleClearHistory}
+              personaColor={activePersona.color}
+              activeSessionId={user?.id}
+              userId={user?.id}
+              user={user}
+              lastSaved={lastSaved}
+              isSessionActive={status === SessionStatus.CONNECTED}
+            />
+
+            {status === SessionStatus.CONNECTED && inputMode === 'TEXT' && (
+              <div className="mt-4 glass rounded-3xl p-4 border border-white/10 flex items-center space-x-4 animate-in slide-in-from-bottom-4 duration-500">
+                <input 
+                  type="text"
+                  placeholder={`Speak to ${activePersona.name}...`}
+                  value={textInputValue}
+                  onChange={(e) => setTextInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendText()}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-all placeholder:text-slate-600"
+                  disabled={isSendingText}
+                />
+                <button 
+                  onClick={handleSendText}
+                  disabled={isSendingText || !textInputValue.trim()}
+                  className={`p-4 rounded-2xl ${theme.bg} text-white shadow-xl hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:scale-100`}
+                >
+                  {isSendingText ? (
+                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
-      {showAuth && (
-        <AuthModal 
-          onAuth={handleAuth} 
-          onClose={() => setShowAuth(false)} 
-          theme={theme}
-        />
-      )}
-
-      {showAdmin && user?.isAdmin && (
-        <AdminPanel 
-          onClose={() => setShowAdmin(false)} 
-          theme={theme}
-        />
-      )}
+      {showAuth && <AuthModal onAuth={handleAuth} onClose={() => setShowAuth(false)} theme={theme} />}
+      {showAdmin && user?.isAdmin && <AdminPanel onClose={() => setShowAdmin(false)} theme={theme} />}
     </div>
   );
 };
