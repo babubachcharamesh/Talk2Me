@@ -11,6 +11,7 @@ interface AdminPanelProps {
 
 const VOICES = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'];
 const COLORS = ['rose', 'blue', 'amber', 'orange', 'purple', 'emerald'];
+const CLASSIFICATIONS = ['Father', 'Mother', 'Son', 'Daughter', 'Relative', 'Guardian', 'Friend'];
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'personas'>('users');
@@ -208,7 +209,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
             )}
             {activeTab === 'personas' && (
               <button 
-                onClick={() => { setIsAddingPersona(true); setPersonaForm({ voice: 'Puck', color: 'blue' }); }}
+                onClick={() => { setIsAddingPersona(true); setPersonaForm({ voice: 'Puck', color: 'blue', label: 'Guardian' }); }}
                 className="bg-emerald-600 text-white px-6 py-2 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500 transition-all shadow-xl active:scale-95 flex items-center space-x-2"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
@@ -343,35 +344,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
         {(isAddingPersona || editingPersona) && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/95 animate-in fade-in duration-300">
             <div className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">
-              <h3 className="text-2xl font-black text-white mb-6">
-                {isAddingPersona ? 'Define New Neural Signature' : `Modify ${editingPersona?.name}`}
-              </h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-black text-white">
+                  {isAddingPersona ? 'Define New Neural Signature' : `Modify ${editingPersona?.name}`}
+                </h3>
+              </div>
               <form onSubmit={handlePersonaSubmit} className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Callsign</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</label>
                     <input 
                       required
+                      placeholder="e.g. Ramesh Kumar Sah"
                       value={personaForm.name}
                       onChange={e => setPersonaForm({...personaForm, name: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Classification</label>
-                    <input 
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Role Classification</label>
+                    <select 
                       required
                       value={personaForm.label}
                       onChange={e => setPersonaForm({...personaForm, label: e.target.value})}
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-indigo-500"
-                    />
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                    >
+                      <option value="" disabled className="bg-slate-900">Select Role</option>
+                      {CLASSIFICATIONS.map(c => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
+                    </select>
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Public Description</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Public Description</label>
                   <textarea 
                     required
+                    placeholder="Briefly describe this family member's personality..."
                     value={personaForm.description}
                     onChange={e => setPersonaForm({...personaForm, description: e.target.value})}
                     rows={2}
@@ -381,35 +389,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, theme }) => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Voice Synthesis</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Voice Synthesis Matrix</label>
                     <select 
+                      required
                       value={personaForm.voice}
                       onChange={e => setPersonaForm({...personaForm, voice: e.target.value as any})}
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-indigo-500 appearance-none"
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
                     >
-                      {VOICES.map(v => <option key={v} value={v} className="bg-slate-900">{v}</option>)}
+                      {VOICES.map(v => <option key={v} value={v} className="bg-slate-900">{v} (Neural Voice)</option>)}
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Visual Aura</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Visual Aura Aura Color</label>
                     <select 
+                      required
                       value={personaForm.color}
                       onChange={e => setPersonaForm({...personaForm, color: e.target.value})}
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-indigo-500 appearance-none"
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
                     >
-                      {COLORS.map(c => <option key={c} value={c} className="bg-slate-900 capitalize">{c}</option>)}
+                      {COLORS.map(c => <option key={c} value={c} className="bg-slate-900 capitalize">{c} Aura</option>)}
                     </select>
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Core Directive (System Prompt)</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Neural Core Directive (AI Logic)</label>
                   <textarea 
                     required
                     value={personaForm.prompt}
                     onChange={e => setPersonaForm({...personaForm, prompt: e.target.value})}
                     rows={4}
-                    placeholder="E.g. You are an expert therapist specializing in..."
+                    placeholder="Instructions for the AI, e.g. You are Ramesh, a wise father..."
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-indigo-500 resize-none font-mono text-xs leading-relaxed"
                   />
                 </div>

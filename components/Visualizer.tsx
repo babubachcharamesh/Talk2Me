@@ -39,7 +39,8 @@ const emotionToHex = (emotion: Emotion = 'NEUTRAL') => {
 const Visualizer: React.FC<VisualizerProps> = ({ isActive, analyzer, color, emotion = 'NEUTRAL' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const theme = colorToHex(color);
-  const moodColor = emotionToHex(emotion);
+  // Fix: Explicitly cast emotion as Emotion type to match the parameter type of emotionToHex
+  const moodColor = emotionToHex(emotion as Emotion);
 
   useEffect(() => {
     if (!canvasRef.current || !isActive || !analyzer) return;

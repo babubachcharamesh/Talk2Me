@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { TranscriptionItem, ConversationSession, User } from '../types';
+import { TranscriptionItem, ConversationSession, User, Emotion } from '../types';
 import { exportToTxt, exportToJson, exportToPdf } from '../utils/export-utils';
 import Avatar from './Avatar';
 
@@ -25,6 +25,18 @@ const getColorClasses = (color: string = 'blue') => {
     emerald: { bg: 'bg-emerald-600', text: 'text-emerald-400', shadow: 'shadow-emerald-600/20' }
   };
   return map[color] || map.blue;
+};
+
+const MOOD_MAP: Record<Emotion, { icon: string; label: string; color: string; bg: string }> = {
+  NEUTRAL: { icon: '🧠', label: 'Neutral', color: 'text-slate-400', bg: 'bg-slate-500/10' },
+  HAPPY: { icon: '✨', label: 'Happy', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+  EXCITED: { icon: '⚡', label: 'Excited', color: 'text-pink-400', bg: 'bg-pink-500/10' },
+  SAD: { icon: '🌊', label: 'Melancholic', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  CONCERNED: { icon: '🛡️', label: 'Concerned', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+  ANGRY: { icon: '🔥', label: 'Intense', color: 'text-red-400', bg: 'bg-red-500/10' },
+  THOUGHTFUL: { icon: '🌌', label: 'Thoughtful', color: 'text-teal-400', bg: 'bg-teal-500/10' },
+  CURIOUS: { icon: '🔍', label: 'Curious', color: 'text-violet-400', bg: 'bg-violet-500/10' },
+  EMPATHETIC: { icon: '💖', label: 'Empathetic', color: 'text-orange-400', bg: 'bg-orange-500/10' }
 };
 
 const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ 
@@ -168,11 +180,19 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({
                   <Avatar user={user} size="xs" />
                 ) : (
                   <div className={`w-6 h-6 rounded-full ${theme.bg} flex items-center justify-center text-[10px] font-black text-white shadow-md border border-white/10 transition-colors duration-500`}>
-                    AI
+                    {initialsFromName(personaColor || 'AI')}
                   </div>
                 )}
               </div>
               <div className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'} max-w-[80%]`}>
+                {item.role === 'model' && item.mood && (
+                  <div className={`flex items-center space-x-1.5 mb-1 px-2 py-0.5 rounded-full border border-white/5 ${MOOD_MAP[item.mood].bg} animate-in zoom-in duration-500`}>
+                    <span className="text-[10px]">{MOOD_MAP[item.mood].icon}</span>
+                    <span className={`text-[8px] font-black uppercase tracking-widest ${MOOD_MAP[item.mood].color}`}>
+                      {MOOD_MAP[item.mood].label}
+                    </span>
+                  </div>
+                )}
                 <div 
                   className={`px-5 py-3 rounded-2xl text-sm leading-relaxed transition-all duration-500 ${
                     item.role === 'user' 
@@ -191,19 +211,6 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({
         )}
       </div>
 
-      {/* Floating Scroll to Bottom Button */}
-      <button
-        onClick={scrollToBottom}
-        className={`absolute bottom-8 right-8 p-3 rounded-full ${theme.bg} text-white shadow-2xl transition-all duration-300 transform z-30 ${
-          showScrollButton ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-4 opacity-0 scale-50 pointer-events-none'
-        } hover:brightness-110 hover:scale-110 active:scale-95 flex items-center justify-center`}
-        title="Scroll to bottom"
-      >
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
-        </svg>
-      </button>
-
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -217,5 +224,10 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({
     </div>
   );
 };
+
+// Helper for initial rendering in the panel
+function initialsFromName(name: string) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+}
 
 export default TranscriptionPanel;

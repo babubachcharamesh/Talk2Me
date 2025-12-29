@@ -14,62 +14,62 @@ const MODEL_NAME = 'gemini-2.5-flash-native-audio-preview-09-2025';
 
 const DEFAULT_PERSONAS: Persona[] = [
   {
-    id: 'sarah',
-    name: 'Sarah',
-    label: 'Woman',
-    description: 'Empathetic, warm, and a great active listener.',
+    id: 'ramesh',
+    name: 'Ramesh Kumar Sah',
+    label: 'Father (51)',
+    description: 'Wise, paternal, and experienced. Offers grounded advice and authority.',
+    voice: 'Fenrir',
+    color: 'blue',
+    prompt: 'You are Ramesh Kumar Sah, a 51-year-old wise father figure. You are calm, authoritative yet kind, and offer practical, grounded wisdom.'
+  },
+  {
+    id: 'pratima',
+    name: 'Pratima Kumari Sah',
+    label: 'Mother (41)',
+    description: 'Nurturing, warm, and deeply empathetic. Focuses on care and support.',
     voice: 'Puck',
     color: 'rose',
-    prompt: 'You are Sarah, a warm and empathetic woman in her late 30s. You are an expert active listener.'
+    prompt: 'You are Pratima Kumari Sah, a 41-year-old nurturing mother figure. You are warm, supportive, and an excellent listener who cares deeply about emotional well-being.'
   },
   {
-    id: 'arthur',
-    name: 'Arthur',
-    label: 'Man',
-    description: 'Professional, articulate, and logically grounded.',
+    id: 'narmesh',
+    name: 'Narmesh Kumar Sah',
+    label: 'Elder Son (21)',
+    description: 'Articulate, logical, and youthful. Represents a modern, student perspective.',
     voice: 'Zephyr',
-    color: 'blue',
-    prompt: 'You are Arthur, a professional man. You focus on logic and facts.'
-  },
-  {
-    id: 'elias',
-    name: 'Elias',
-    label: 'Old Man',
-    description: 'Wise, slow-paced, and full of storytelling wisdom.',
-    voice: 'Fenrir',
-    color: 'amber',
-    prompt: 'You are Elias, a wise 80-year-old man. You share stories with patience.'
-  },
-  {
-    id: 'martha',
-    name: 'Martha',
-    label: 'Old Woman',
-    description: 'Nurturing, grandmotherly, and very supportive.',
-    voice: 'Puck',
-    color: 'orange',
-    prompt: 'You are Martha, a nurturing grandmother figure.'
-  },
-  {
-    id: 'lily',
-    name: 'Lily',
-    label: 'Girl',
-    description: 'High energy, creative, and endlessly curious.',
-    voice: 'Kore',
     color: 'purple',
-    prompt: 'You are Lily, a bubbly 12-year-old girl.'
+    prompt: 'You are Narmesh Kumar Sah, a 21-year-old intelligent young man. You are articulate, logically minded, and represent a modern, youthful perspective.'
+  },
+  {
+    id: 'prakriti',
+    name: 'Prakriti Kumar Sah',
+    label: 'Daughter (19)',
+    description: 'Creative, expressive, and bright. ENDLESSLY curious and insightful.',
+    voice: 'Kore',
+    color: 'emerald',
+    prompt: 'You are Prakriti Kumar Sah, a 19-year-old creative daughter. You are bright, expressive, and share insights with a spark of creativity and curiosity.'
+  },
+  {
+    id: 'ranveer',
+    name: 'Ranveer Sah',
+    label: 'Younger Son (15)',
+    description: 'High energy, witty, and tech-savvy. Full of youthful spirit.',
+    voice: 'Charon',
+    color: 'amber',
+    prompt: 'You are Ranveer Sah, a 15-year-old energetic younger son. You are witty, tech-savvy, and full of the vibrant spirit of a teenager.'
   }
 ];
 
-const MOOD_CONFIG: Record<Emotion, { glow: string; label: string; ring: string; icon: string; textColor: string }> = {
-  NEUTRAL: { glow: 'bg-indigo-600', label: 'Neutral', ring: 'ring-white/20', icon: '🧠', textColor: 'text-slate-400' },
-  HAPPY: { glow: 'bg-yellow-500', label: 'Happy', ring: 'ring-yellow-400/50', icon: '✨', textColor: 'text-yellow-400' },
-  EXCITED: { glow: 'bg-pink-500', label: 'Excited', ring: 'ring-pink-400/50', icon: '⚡', textColor: 'text-pink-400' },
-  SAD: { glow: 'bg-blue-800', label: 'Melancholic', ring: 'ring-blue-600/50', icon: '🌊', textColor: 'text-blue-400' },
-  CONCERNED: { glow: 'bg-cyan-700', label: 'Concerned', ring: 'ring-cyan-500/50', icon: '🛡️', textColor: 'text-cyan-400' },
-  ANGRY: { glow: 'bg-red-600', label: 'Intense', ring: 'ring-red-500/50', icon: '🔥', textColor: 'text-red-400' },
-  THOUGHTFUL: { glow: 'bg-teal-500', label: 'Thoughtful', ring: 'ring-teal-400/50', icon: '🌌', textColor: 'text-teal-400' },
-  CURIOUS: { glow: 'bg-violet-500', label: 'Curious', ring: 'ring-violet-400/50', icon: '🔍', textColor: 'text-violet-400' },
-  EMPATHETIC: { glow: 'bg-orange-400', label: 'Empathetic', ring: 'ring-orange-300/50', icon: '💖', textColor: 'text-orange-400' }
+const MOOD_CONFIG: Record<Emotion, { glow: string; label: string; ring: string; icon: string; textColor: string; aura: string }> = {
+  NEUTRAL: { glow: 'bg-indigo-600', label: 'Neutral', ring: 'ring-white/20', icon: '🧠', textColor: 'text-slate-400', aura: 'bg-slate-500/5' },
+  HAPPY: { glow: 'bg-yellow-500', label: 'Happy', ring: 'ring-yellow-400/50', icon: '✨', textColor: 'text-yellow-400', aura: 'bg-yellow-400/10' },
+  EXCITED: { glow: 'bg-pink-500', label: 'Excited', ring: 'ring-pink-400/50', icon: '⚡', textColor: 'text-pink-400', aura: 'bg-pink-400/10' },
+  SAD: { glow: 'bg-blue-800', label: 'Melancholic', ring: 'ring-blue-600/50', icon: '🌊', textColor: 'text-blue-400', aura: 'bg-blue-600/10' },
+  CONCERNED: { glow: 'bg-cyan-700', label: 'Concerned', ring: 'ring-cyan-500/50', icon: '🛡️', textColor: 'text-cyan-400', aura: 'bg-cyan-500/10' },
+  ANGRY: { glow: 'bg-red-600', label: 'Intense', ring: 'ring-red-500/50', icon: '🔥', textColor: 'text-red-400', aura: 'bg-red-600/10' },
+  THOUGHTFUL: { glow: 'bg-teal-500', label: 'Thoughtful', ring: 'ring-teal-400/50', icon: '🌌', textColor: 'text-teal-400', aura: 'bg-teal-400/10' },
+  CURIOUS: { glow: 'bg-violet-500', label: 'Curious', ring: 'ring-violet-400/50', icon: '🔍', textColor: 'text-violet-400', aura: 'bg-violet-400/10' },
+  EMPATHETIC: { glow: 'bg-orange-400', label: 'Empathetic', ring: 'ring-orange-300/50', icon: '💖', textColor: 'text-orange-400', aura: 'bg-orange-400/10' }
 };
 
 const App: React.FC = () => {
@@ -85,6 +85,7 @@ const App: React.FC = () => {
   
   const [activePersona, setActivePersona] = useState<Persona>(personas[0] || DEFAULT_PERSONAS[0]);
   const [currentMood, setCurrentMood] = useState<Emotion>('NEUTRAL');
+  const [currentTopic, setCurrentTopic] = useState<string>('');
   const [status, setStatus] = useState<SessionStatus>(SessionStatus.IDLE);
   const [transcriptions, setTranscriptions] = useState<TranscriptionItem[]>([]);
   const [lastSaved, setLastSaved] = useState<number | null>(null);
@@ -175,12 +176,12 @@ const App: React.FC = () => {
 
   const theme = useMemo(() => {
     const map: Record<string, any> = {
-      rose: { bg: 'bg-rose-600', border: 'border-rose-500/30', glow: 'bg-rose-500', shadow: 'shadow-rose-600/20' },
-      blue: { bg: 'bg-blue-600', border: 'border-blue-500/30', glow: 'bg-blue-500', shadow: 'shadow-blue-600/20' },
-      amber: { bg: 'bg-amber-600', border: 'border-amber-500/30', glow: 'bg-amber-500', shadow: 'shadow-amber-600/20' },
-      orange: { bg: 'bg-orange-600', border: 'border-orange-500/30', glow: 'bg-orange-500', shadow: 'shadow-orange-600/20' },
-      purple: { bg: 'bg-purple-600', border: 'border-purple-500/30', glow: 'bg-purple-500', shadow: 'shadow-purple-600/20' },
-      emerald: { bg: 'bg-emerald-600', border: 'border-emerald-500/30', glow: 'bg-emerald-500', shadow: 'shadow-emerald-600/20' }
+      rose: { bg: 'bg-rose-600', border: 'border-rose-500/30', glow: 'bg-rose-500', shadow: 'shadow-rose-600/20', text: 'text-rose-400' },
+      blue: { bg: 'bg-blue-600', border: 'border-blue-500/30', glow: 'bg-blue-500', shadow: 'shadow-blue-600/20', text: 'text-blue-400' },
+      amber: { bg: 'bg-amber-600', border: 'border-amber-500/30', glow: 'bg-amber-500', shadow: 'shadow-amber-600/20', text: 'text-amber-400' },
+      orange: { bg: 'bg-orange-600', border: 'border-orange-500/30', glow: 'bg-orange-500', shadow: 'shadow-orange-600/20', text: 'text-orange-400' },
+      purple: { bg: 'bg-purple-600', border: 'border-purple-500/30', glow: 'bg-purple-500', shadow: 'shadow-purple-600/20', text: 'text-purple-400' },
+      emerald: { bg: 'bg-emerald-600', border: 'border-emerald-500/30', glow: 'bg-emerald-500', shadow: 'shadow-emerald-600/20', text: 'text-emerald-400' }
     };
     const baseTheme = map[activePersona.color] || map.blue;
     const moodConfig = MOOD_CONFIG[currentMood];
@@ -191,7 +192,8 @@ const App: React.FC = () => {
       moodLabel: moodConfig.label,
       moodRing: moodConfig.ring,
       moodIcon: moodConfig.icon,
-      moodTextColor: moodConfig.textColor
+      moodTextColor: moodConfig.textColor,
+      moodAura: moodConfig.aura
     };
   }, [activePersona, currentMood]);
 
@@ -257,6 +259,10 @@ const App: React.FC = () => {
       outputNode.connect(analyzerRef.current);
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const topicInstruction = currentTopic 
+        ? `\n\nCRITICAL CONTEXT: The user has specified a specific topic for this conversation. You must talk EXCLUSIVELY about: "${currentTopic}". If the user attempts to change the subject, politely guide the conversation back to "${currentTopic}" while staying in character as ${activePersona.name}.`
+        : "";
 
       const sessionPromise = ai.live.connect({
         model: MODEL_NAME,
@@ -362,7 +368,7 @@ const App: React.FC = () => {
         },
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: `${activePersona.prompt}\n\nCRITICAL: You are equipped with emotional intelligence. At the very start of EVERY response, output your current emotional state in brackets, like this: [MOOD: HAPPY], [MOOD: CONCERNED], [MOOD: EMPATHETIC], [MOOD: CURIOUS], [MOOD: THOUGHTFUL]. Choose from: HAPPY, EXCITED, SAD, CONCERNED, ANGRY, THOUGHTFUL, CURIOUS, EMPATHETIC, NEUTRAL.`,
+          systemInstruction: `${activePersona.prompt}${topicInstruction}\n\nCRITICAL: You are equipped with emotional intelligence. At the very start of EVERY response, output your current emotional state in brackets, like this: [MOOD: HAPPY], [MOOD: CONCERNED], [MOOD: EMPATHETIC], [MOOD: CURIOUS], [MOOD: THOUGHTFUL]. Choose from: HAPPY, EXCITED, SAD, CONCERNED, ANGRY, THOUGHTFUL, CURIOUS, EMPATHETIC, NEUTRAL.`,
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: activePersona.voice } }
           },
@@ -375,7 +381,7 @@ const App: React.FC = () => {
       console.error('Failed to start session:', err);
       setStatus(SessionStatus.ERROR);
     }
-  }, [user, activePersona, stopSession, logout, currentMood]);
+  }, [user, activePersona, stopSession, logout, currentMood, currentTopic]);
 
   const handleClearHistory = () => {
     if (user && confirm('Are you sure you want to delete your private conversation history?')) {
@@ -399,6 +405,9 @@ const App: React.FC = () => {
         isSessionActive={status === SessionStatus.CONNECTED} 
       />
       
+      {/* Background Mood Overlay */}
+      <div className={`fixed inset-0 pointer-events-none z-0 transition-colors duration-1000 ${theme.moodAura}`}></div>
+
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${theme.moodGlow} rounded-full blur-[120px] opacity-20 transition-all duration-[1000ms] animate-pulse-slow`}></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600 rounded-full blur-[120px] opacity-10"></div>
@@ -422,7 +431,7 @@ const App: React.FC = () => {
             <div className="flex items-center space-x-4">
               {user.isAdmin && (
                 <button 
-                  onClick={() => setShowAdmin(true)}
+                  onClick={() => { setShowAdmin(true); }}
                   className="text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors"
                 >
                   Admin Console
@@ -452,41 +461,31 @@ const App: React.FC = () => {
 
       <main className="relative z-10 max-w-7xl mx-auto px-8 pt-4 pb-20 flex flex-col lg:flex-row gap-8 min-h-[calc(100vh-100px)]">
         <div className="lg:w-1/3 flex flex-col space-y-6">
+          {/* Persona Card */}
           <div className="glass rounded-[2.5rem] p-8 border border-white/10 relative overflow-hidden flex flex-col items-center">
             <div className={`absolute top-0 right-0 w-32 h-32 ${theme.moodGlow} rounded-full blur-[60px] opacity-20 transition-all duration-[800ms]`}></div>
             
             <div className={`w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-white/10 to-transparent mb-6 transition-all duration-500 ${status === SessionStatus.CONNECTED ? 'scale-110' : ''}`}>
-              <div className={`w-full h-full rounded-full ${theme.bg} flex items-center justify-center text-5xl font-black text-white shadow-2xl relative transition-all duration-500 ring-4 ${theme.moodRing}`}>
+              <div className={`w-full h-full rounded-full ${theme.bg} flex items-center justify-center text-5xl font-black text-white shadow-2xl relative transition-all duration-500 ring-4 ${theme.moodRing} ${status === SessionStatus.CONNECTED && currentMood !== 'NEUTRAL' ? 'animate-pulse' : ''}`}>
                 {activePersona.name[0]}
                 {status === SessionStatus.CONNECTED && (
-                  <span className="absolute inset-0 rounded-full animate-ping bg-white/30"></span>
+                  <span className={`absolute inset-0 rounded-full animate-ping opacity-30 ${theme.moodGlow}`}></span>
                 )}
               </div>
             </div>
 
-            <h2 className="text-3xl font-black text-white mb-1 transition-all duration-500">{activePersona.name}</h2>
+            <h2 className="text-2xl font-black text-white mb-1 transition-all duration-500 text-center">{activePersona.name}</h2>
             <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4">{activePersona.label}</p>
             
             {status === SessionStatus.CONNECTED && (
                <div className="w-full mb-8 animate-in fade-in zoom-in slide-in-from-top-4 duration-700">
-                  <div className="flex flex-col items-center space-y-3 p-4 bg-white/5 border border-white/10 rounded-2xl shadow-inner backdrop-blur-sm">
+                  <div className={`flex flex-col items-center space-y-3 p-4 border border-white/10 rounded-2xl shadow-inner backdrop-blur-sm transition-colors duration-700 ${theme.moodAura}`}>
                     <div className="flex items-center justify-between w-full mb-1">
                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Neural Status Monitor</span>
                       <div className="flex items-center space-x-2">
-                        <button 
-                          onClick={() => setAmbientSync(!ambientSync)}
-                          className={`p-1 rounded-md transition-all ${ambientSync ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-600 bg-white/5'}`}
-                          title={ambientSync ? "Mute Ambient Soundscape" : "Enable Ambient Soundscape"}
-                        >
-                          {ambientSync ? (
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.414 4.243 1 1 0 01-1.415-1.415A3.983 3.983 0 0013 10a3.983 3.983 0 00-1.172-2.828a1 1 0 010-1.415z" /></svg>
-                          ) : (
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.73 4.544a1 1 0 011.027.547c.46.748.702 1.61.702 2.477a4.992 4.992 0 01-.63 2.434 1 1 0 01-1.72-.944 2.994 2.994 0 00.35-1.49c0-.432-.115-.853-.338-1.217a1 1 0 01.609-1.307z" /><path d="M18.364 1.636a1 1 0 010 1.414 9.972 9.972 0 012.929 7.071 9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0019 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 01.707-1.707z" /></svg>
-                          )}
-                        </button>
                         <span className="flex items-center space-x-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          <span className="text-[8px] font-bold text-emerald-500/80 uppercase">Active</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${theme.moodGlow} animate-pulse`}></span>
+                          <span className={`text-[8px] font-bold uppercase ${theme.moodTextColor}`}>Synced</span>
                         </span>
                       </div>
                     </div>
@@ -506,11 +505,6 @@ const App: React.FC = () => {
                           ></div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="w-full pt-2 mt-2 border-t border-white/5 flex justify-between">
-                       <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">Sync Stability: 99.8%</span>
-                       <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">Lat: 24ms</span>
                     </div>
                   </div>
                </div>
@@ -555,37 +549,40 @@ const App: React.FC = () => {
                 )}
               </div>
               <div className={`grid grid-cols-5 gap-2 transition-opacity duration-300 ${!user ? 'opacity-40 grayscale pointer-events-none' : 'opacity-100'}`}>
-                {personas.map(p => (
-                  <div key={p.id} className="relative group/p">
-                    <button
-                      onClick={() => {
-                        if (user && status === SessionStatus.IDLE) setActivePersona(p);
-                      }}
-                      disabled={!user || status !== SessionStatus.IDLE}
-                      className={`w-full aspect-square rounded-xl flex items-center justify-center font-black text-sm transition-all ${
-                        activePersona.id === p.id 
-                          ? `${theme.bg} text-white scale-110 shadow-lg ring-2 ring-white/20` 
-                          : 'bg-white/5 text-slate-500 hover:bg-white/10'
-                      } disabled:cursor-not-allowed`}
-                      title={user ? p.name : 'Sign in to switch signature'}
-                    >
-                      {p.name[0]}
-                    </button>
-                    {user && status === SessionStatus.IDLE && (
+                {personas.map(p => {
+                  const initials = p.name.split(' ').map(n => n[0]).join('').substring(0, 2);
+                  return (
+                    <div key={p.id} className="relative group/p">
                       <button
-                        onClick={(e) => { e.stopPropagation(); handlePreviewVoice(p); }}
-                        className={`absolute -top-1 -right-1 p-1 rounded-full bg-slate-900 border border-white/10 text-white/50 hover:text-white hover:scale-110 transition-all opacity-0 group-hover/p:opacity-100 shadow-xl ${previewingPersonaId === p.id ? 'animate-pulse text-indigo-400' : ''}`}
-                        title="Preview Voice Signature"
+                        onClick={() => {
+                          if (user && status === SessionStatus.IDLE) setActivePersona(p);
+                        }}
+                        disabled={!user || status !== SessionStatus.IDLE}
+                        className={`w-full aspect-square rounded-xl flex items-center justify-center font-black text-[10px] transition-all ${
+                          activePersona.id === p.id 
+                            ? `${theme.bg} text-white scale-110 shadow-lg ring-2 ring-white/20` 
+                            : 'bg-white/5 text-slate-500 hover:bg-white/10'
+                        } disabled:cursor-not-allowed`}
+                        title={user ? p.name : 'Sign in to switch signature'}
                       >
-                        {previewingPersonaId === p.id ? (
-                           <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                        ) : (
-                           <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217z" /></svg>
-                        )}
+                        {initials}
                       </button>
-                    )}
-                  </div>
-                ))}
+                      {user && status === SessionStatus.IDLE && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handlePreviewVoice(p); }}
+                          className={`absolute -top-1 -right-1 p-1 rounded-full bg-slate-900 border border-white/10 text-white/50 hover:text-white hover:scale-110 transition-all opacity-0 group-hover/p:opacity-100 shadow-xl ${previewingPersonaId === p.id ? 'animate-pulse text-indigo-400' : ''}`}
+                          title="Preview Voice Signature"
+                        >
+                          {previewingPersonaId === p.id ? (
+                             <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                          ) : (
+                             <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217z" /></svg>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -600,7 +597,43 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="lg:w-2/3 flex flex-col min-h-[500px]">
+        <div className="lg:w-2/3 flex flex-col space-y-6">
+          {/* Topic Context Card */}
+          <div className={`glass rounded-[2rem] p-6 border transition-all duration-700 ${currentTopic ? theme.border : 'border-white/5'}`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <div className={`w-2 h-2 rounded-full ${currentTopic ? theme.bg : 'bg-slate-700'} ${currentTopic && 'animate-pulse'}`}></div>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Conversation Vector (Topic)</h3>
+              </div>
+              {currentTopic && (
+                <button 
+                  onClick={() => setCurrentTopic('')}
+                  className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-400 transition-colors"
+                >
+                  Clear Vector
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <input 
+                type="text"
+                placeholder="Ex: My college applications, plans for the weekend, tech trends..."
+                value={currentTopic}
+                onChange={(e) => setCurrentTopic(e.target.value)}
+                className={`w-full bg-white/5 border rounded-2xl px-6 py-4 text-sm text-white focus:outline-none transition-all placeholder:text-slate-600 focus:bg-white/10 ${currentTopic ? theme.border : 'border-white/10'}`}
+              />
+              <div className={`absolute right-4 top-1/2 -translate-y-1/2 flex items-center space-x-2 transition-opacity ${currentTopic ? 'opacity-100' : 'opacity-20'}`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${theme.text}`}>Strict Sync</span>
+                <svg className={`w-4 h-4 ${theme.text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              </div>
+            </div>
+            {status === SessionStatus.CONNECTED && currentTopic && (
+              <p className="mt-3 text-[9px] font-bold text-indigo-400/60 uppercase tracking-widest animate-pulse ml-1 text-center">
+                * Restart Transmission to apply new vector if changed during active session *
+              </p>
+            )}
+          </div>
+
           <TranscriptionPanel 
             items={transcriptions} 
             onClear={handleClearHistory}
